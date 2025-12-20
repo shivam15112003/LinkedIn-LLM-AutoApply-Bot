@@ -1,0 +1,50 @@
+JOB TITLE: Head of Research And Development
+Head of Research And Development
+Demeter Roboti
+About the job
+Job Description:
+Head of R&D
+ Compensation Range: $250,000 - $350,000
+Type: Part-time/ Contract/Hybrid
+Location: Glendale, CA and 2-3 months, Hangzhou, China
+
+About Us: Demeter Robotics is a venture-backed seed-stage robot AgTech startup founded by a team of serial entrepreneur and researchers . We're developing robots to perform harvesting tasks for specialty crops, especially table grapes, apples, kiwi fruits, etc addressing the imminent
+ problems of labor shortage and aging workforce in agriculture sector. We’re a fast-paced, execution-driven team of engineers, roboticists, and dreamers.
+
+About the Role
+
+As Head of R&D, you’ll be the technical backbone of our robotics deployment efforts. You’ll architect, design, and implement the core robotic frameworks that enable our robots to operate reliably in the real world. From ROS2 middleware to state machines and behavior trees, your work will bridge software, hardware, and learning systems - ensuring our robotics can adapt and perform across diverse environments.
+
+This is a leadership-level role with hands-on execution: you’ll own critical parts of the robot software stack, guide technical direction, and mentor a growing team of roboticists. Your contributions will directly shape how our robots think, act, and learn in the real world.
+
+Responsibilities
+· Architect and implement the robot stack (ROS2, messaging, distributed systems) for robotics deployments.
+· Design and integrate state machines for reliable real-world task execution.
+· Develop frameworks for real-time decision-making and task sequencing across robot subsystems.
+· Collaborate with perception, controls, and ML teams to integrate robot learning methods into production systems.
+· Lead deployment of robotics into real-world environments, ensuring reliability, safety, and performance.
+· Mentor and guide junior roboticists, contributing to both technical excellence and engineering culture.
+· Work closely with hardware engineers to ensure seamless software-hardware integration and robustness under deployment conditions.
+
+Qualifications
+ 10+ years of progressive leadership experience in Research & Development
+· Demonstrated experience in leading and scaling R&D teams of a similar size (10+ professionals).
+· Strong programming background (C++, Python; bonus: middleware, distributed systems).
+· Hands-on ROS2 expertise, including middleware development and custom nodes.
+· Background in real-time systems, robot middleware, or communication protocols.
+· Strong debugging and integration skills across hardware/software boundaries.
+· experience in robot learning, reinforcement/imitation learning, or data-driven robot behavior.
+· Bonus: Professor of QS100 universities or Fortunate 500 Executives
+· 
+What You’ll Get
+· Ownership over the core robotic stack powering robotics deployments.
+· Early equity with meaningful upside in a venture-backed robotics company. 
+· Exposure to the full robotics stack — hardware, controls, perception, ML.
+· A front-row seat in scaling a technically ambitious company from seed stage.
+
+Perks: Competitive salary + equity, flexible PTO
+
+Additional Job Application Terms
+This job is part of LinkedIn’s Full-Service Hiring beta program. Eligibility is limited to candidates located in and performing services in the United States, excluding those based in Alaska, Hawaii, Nevada, South Carolina, or West Virginia.
+
+We’re committed to making our hiring process as smooth and timely as possible, and we understand that waiting to hear back can add to the anticipation. If you’re a potential fit, our team will reach out within two weeks to progress you to the next stage. If you don’t hear from us in that time, we encourage you to explore other opportunities with our team in the future, and we wish you the very best in your job search.

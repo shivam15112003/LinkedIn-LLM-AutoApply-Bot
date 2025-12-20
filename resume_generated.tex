@@ -1,0 +1,117 @@
+
+\documentclass[8pt]{extarticle}
+
+\usepackage[margin=0.5in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{needspace}
+
+\linespread{0.96}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+\setlist[itemize]{leftmargin=*, itemsep=0.10em, topsep=0.15em}
+\pagestyle{empty}
+
+\newcommand{\resSection}[1]{%
+  \vspace{0.4em}%
+  \textbf{\normalsize #1}\\[-0.35em]
+  \rule{\textwidth}{0.3pt}\\[0.15em]
+}
+
+\begin{document}
+
+%==================== HEADER ====================
+
+\begin{center}
+  {\normalsize \textbf{SHIVAM SHARMA}}\\[2pt]
+  +1 (480) 208 -5286 \textbar{} \href{mailto:sshar443@asu.edu}{sshar443@asu.edu} \textbar{} \href{https://github.com/shivam15112003}{github.com/shivam15112003} \textbar{} \href{https://www.linkedin.com/in/ss1511/}{www.linkedin.com/in/ss1511} \textbar{} \href{https://shivam15112003.github.io/shivam-portfolio/}{shivam15112003.github.io/shivam-portfolio}
+\end{center}
+
+%==================== SUMMARY ====================
+
+\resSection{SUMMARY}
+
+AI/Robotics engineer skilled in ML/DL, computer vision, and real-time robotic systems. Seeking a leadership role in robotics R\&D.
+
+%==================== EDUCATION ====================
+
+\resSection{EDUCATION}
+
+\textbf{Bachelor of Technology in Artificial Intelligence} \hfill Aug 2021 - May 2025\\
+Amity University, Noida, Uttar Pradesh, India \hfill \textbf{9.8/10 GPA}\\[0.1em]
+
+\textbf{Master of Science in Robotics and Autonomous Systems (AI)} \hfill May 2027\\
+Arizona State University, Tempe, AZ \hfill \textbf{3.9 GPA}\\[0.1em]
+
+%==================== PROFESSIONAL EXPERIENCE ====================
+
+\resSection{PROFESSIONAL EXPERIENCE}
+
+\textbf{AI/ML Engineer} \hfill January 2025 –June 2025\\
+Salesforce, Gurgaon, Haryana, India -- \textbf{Tech Stack:} Python, PyTorch, TensorFlow/Keras, OpenCV, ONNX, MLflow, NumPy, Pandas, scikit-learn, librosa, Matplotlib\
+\begin{itemize}
+  \item Shipped a real-time multi-attribute face analytics service by fine-tuning MobileNetV2 and exporting to ONNX, achieving 30 FPS with <30ms latency and 94-95\% macro-F1.
+  \item Engineered a robust driver drowsiness \& distraction system fusing blink-rate, PnP head-pose, and a CNN yawning detector, reaching 0.92 F1 on 20+ hours of video.
+  \item Developed a multimodal emotion classifier, combining facial CNN with BiLSTM, achieving 91-94\% accuracy and accelerating iteration via automated labeling/augmentation with MLflow.
+\end{itemize}
+
+\vspace{0.15em}
+
+
+\textbf{Data Scientist Intern} \hfill April 2024 –June 2024\\
+HCLTech, Noida, Uttar Pradesh, India -- \textbf{Tech Stack:} Python, scikit-learn, Optuna, SMOTE (imblearn), Pandas, NumPy, SHAP, Streamlit, Matplotlib\
+\begin{itemize}
+  \item Built an early-warning churn score for 500K+ customers using real-world signals, improving identification of likely churners by \textasciitilde{}25\% over prior methods.
+  \item Developed a reusable scikit-learn pipeline with target encoding, SMOTE, time-aware cross-validation, and Optuna hyperparameter search, producing a model card with stability/fairness checks.
+  \item Explained model drivers with SHAP and delivered a lightweight Streamlit dashboard for operations, reducing false positives by 18\% at fixed recall in back tests.
+\end{itemize}
+
+%==================== ACADEMIC PROJECTS ====================
+
+\resSection{ACADEMIC PROJECTS}
+
+\textbf{Agentic Robot Control via LLM/VLM (Prompt-to-Action)} \hfill Sep 2025 – Dec 2025\\
+\textbf{Tools/Languages:} Python, PyTorch, OpenCV, ROS2, IK, gripper control\\
+\begin{itemize}
+  \item Architected an agentic AI pipeline converting natural-language prompts into parameterized pick/place/rotate robot skills, demonstrating advanced prompt template expansion.
+  \item Integrated monocular depth estimation for Z-aware scene understanding and kinematic planning, composing perception, planning, and execution with robust safety and recovery.
+  \item Achieved precise grasp/placement across diverse object constraints, instrumenting runs with rosbag2 and ros2 launch for comprehensive analysis and validation.
+\end{itemize}
+
+\vspace{0.12em}
+
+\textbf{Dobot Magician: Agentic Tic-Tac-Toe (Vision + LLM Planning)} \hfill Aug 2025 – Sep 2025\\
+\textbf{Tools/Languages:} OpenCV, AprilTag, ROS2 (rclcpp), tf2, Python, C++\\
+\begin{itemize}
+  \item Developed a computer vision system for real-time board-state detection (perspective, color/edge segmentation, AprilTag), commanding Dobot Magician via ROS2 for precise X/O placement.
+  \item Orchestrated a robust perception-planning-actuation loop using Gemini LLM function calls (Minimax + alpha-beta), incorporating IK limits and safety bounds for illegal/ambiguous states.
+  \item Attained \textasciitilde{}1.4s p50 latency and <= 2mm placement error over 200 games, validated through comprehensive profiling and logging for system stability.
+\end{itemize}
+
+\vspace{0.12em}
+
+\textbf{ROS2 Gesture-to-Robot: Vision-based Tele-operation} \hfill Jan 2025 – Apr 2025\\
+\textbf{Tools/Languages:} MediaPipe, OpenCV, ROS2 (Python/C++), Gazebo\\
+\begin{itemize}
+  \item Implemented a real-time hand/pose interface mapping gestures to TurtleBot navigation and gripper actions, achieving end-to-end latency of \textasciitilde{}55ms for fluid tele-operation.
+  \item Achieved >= 95\% F1 on custom gesture dataset with 2.8cm mean path error in simulation, incorporating safety gestures and low-pass filtering for jitter reduction.
+  \item Ensured >= 97\% gesture-to-action reliability and <= 120ms safe-stop via ROS2 safety supervisor (Kalman smoothing, dead-man open-palm) and QoS tuning for robust control.
+\end{itemize}
+
+%==================== TECHNICAL SKILLS AND CERTIFICATIONS ====================
+
+\needspace{10\baselineskip}
+\resSection{TECHNICAL SKILLS AND CERTIFICATIONS}
+
+\textbf{Programming Languages:} C++, Python, SQL\\
+\textbf{Machine Learning \& Deep Learning:} PyTorch, TensorFlow, scikit-learn\\
+\textbf{MLOps \& Optimization:} MLflow\\
+\textbf{Computer Vision \& Robotics:} MediaPipe, OpenCV, ROS2\\
+\textbf{Other:} Distributed Systems\\
+\textbf{Certifications:} Microsoft AI, Applied AI (IBM/Coursera), Aerial Robotics (University of Pennsylvania), Python for Data Science (NPTEL)\\
+
+
+\end{document}

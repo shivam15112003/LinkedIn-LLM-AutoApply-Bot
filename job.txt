@@ -1,0 +1,46 @@
+About the job
+Zoox’s internship program provides hands-on experiences with state of the art technology, mentorship from some of the industry's brightest minds, and the opportunity to play a part in our success. Internships at Zoox are reserved for those who demonstrate outstanding academic performance, activities outside their course work, aptitude, curiosity, and a passion for Zoox's mission.
+
+The Simulation team creates high fidelity synthetic data for training and testing AV AI, as well as real time sensor data for hardware-in-the-loop simulation. Zoox vehicles are deployed in many cities across the US, and wherever Zoox goes, Simulation makes sure we are good to go.
+
+As an MLE Intern working on Simulation, you may be assigned to one of the following teams:
+
+On the 3D World Sim team, you will extend our simulation pipeline to reproduce dynamic actors accurately in simulation. You will research and evaluate various reconstruction algorithms and integrate the most promising of them into our simulation framework.
+
+On the Agent Simulation team, you will develop and improve models that realistically simulate the behavior of other road agents like pedestrians and vehicles. You will leverage software engineering and machine learning skills to ensure these simulated agents exhibit a wide range of plausible and representative human behaviors, which is critical for validating the safety and performance of Zoox's autonomous driving technology.
+
+On the 3D Sensor Simulation team, you will help create high fidelity synthetic data for training and testing AV AI, as well as real time sensor data for hardware-in-the-loop simulation. You will develop 3D ML models and training datasets for 3D sensor simulation using modern machine learning architectures. Collaborate with the Sensors, Perception, and Validation teams to evaluate and iteratively improve the fidelity of sensor simulation.
+
+On the Scenario Authoring team, you will help create agentic AI systems capable of generating novel scenarios for validating the safety and performance of Zoox's autonomous driving technology. You will leverage your software engineering and machine learning skills to gather data, fine-tune existing diffusion / foundation models, add new capabilities to our LLM agent, and evaluate success against customer requirements.
+
+On the Scenario Automation team, you will help build scenario generation and analysis tools used to evaluate robot behavior via simulation. You will leverage your software engineering and machine learning skills to recreate high-fidelity simulation scenarios from recorded real-world driving data. Together, we’re creating a highly-scalable system used by mission assurance and autonomy engineers to continuously improve the safety and reliability of our robots.
+
+Requirements
+
+Currently working towards a B.S., M.S., Ph.D., or advanced degree in a relevant engineering program
+Must be returning to school to continue your education upon completing this internship
+Good academic standing
+Able to commit to a 12-week internship beginning in May or June of 2026.
+At least one previous industry internship, co-op, or project completed in a relevant area
+Ability to relocate to the Bay Area, California or Seattle for the duration of the internship
+Interns at Zoox may not use any proprietary information they are working on as part of their thesis, any published work with their university, or to be distributed to anyone outside of Zoox
+
+Qualifications
+
+Fluency in C++ and/or Python, as well as a strong understanding of data structures and algorithms
+Strong skills in mathematics, particularly linear algebra
+Experience with large-scale code projects
+
+Bonus Qualifications
+
+Broad knowledge of Gaussian Splatting or Neural Radiance Fields
+Strong understanding of generative AI techniques including diffusion, GAN, and transformers
+Experience with game development or simulation frameworks used in robotics
+Experience with 3D game logic
+Experience with Typescript 
+
+Compensation
+
+The monthly salary range for this position is $5,500 to $9,500. Compensation will vary based on geographic location and level of education. Additional benefits may include medical insurance, and a housing stipend (relocation assistance will be offered based on eligibility).
+
+We may use artificial intelligence (AI) tools to support parts of the hiring process, such as reviewing applications, analyzing resumes, or assessing responses. These tools assist our recruitment team but do not replace human judgment. Final hiring decisions are ultimately made by humans. If you would like more information about how your data is processed, please contact us.
