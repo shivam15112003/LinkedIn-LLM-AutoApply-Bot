@@ -3,7 +3,7 @@
 ![Status](https://img.shields.io/badge/status-Active-green)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Automation](https://img.shields.io/badge/automation-Selenium%20%2B%20Gemini-purple)
-![License](https://img.shields.io/badge/license-MIT-green)
+
 
 > **An intelligent LinkedIn job application automation system**  
 > Local resume & cover letter generation + Gemini-guided UI interaction.
