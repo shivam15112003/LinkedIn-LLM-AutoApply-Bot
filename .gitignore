@@ -1,13 +1,7 @@
-__pycache__/
-*.pyc
-*.pyo
+gemini_api_key.txt
 *.log
 venv/
 dobot_env/
-.env
-gemini_api_key.txt
+*.pdf
 job_descriptions/
 form_answers/
-*.pdf
-.vscode/
-.idea/
