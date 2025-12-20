@@ -37,6 +37,47 @@ JOB_DESC_PATH = BASE_DIR / "job.txt"
 RESUME_TEX_PATH = BASE_DIR / "resume_generated.tex"
 COVER_LETTER_TEX_PATH = BASE_DIR / "cover_letter_generated.tex"
 
+def merge_pdfs(resume_pdf: Path, cover_pdf: Path, output_path: Path) -> Path:
+    """
+    Merge resume and cover-letter PDFs into one combined PDF,
+    while keeping the original PDFs unchanged.
+    """
+    writer = PyPDF2.PdfWriter()
+
+    for pdf in (resume_pdf, cover_pdf):
+        reader = PyPDF2.PdfReader(str(pdf))
+        for page in reader.pages:
+            writer.add_page(page)
+
+    with open(output_path, "wb") as f:
+        writer.write(f)
+
+    print(f"✅ Combined resume + cover letter PDF generated at: {output_path}")
+    return output_path
+
+def extract_links_from_pdf(pdf_path: Path):
+    """
+    Extract all hyperlink URLs from a PDF using PyPDF2 annotations.
+    Returns a list of URLs as strings, preserving order and removing duplicates.
+    """
+    reader = PyPDF2.PdfReader(str(pdf_path))
+    urls = []
+    seen = set()
+
+    for page in reader.pages:
+        annots = page.get("/Annots")
+        if not annots:
+            continue
+        for annot in annots:
+            obj = annot.get_object()
+            if obj.get("/Subtype") == "/Link":
+                action = obj.get("/A")
+                if action and "/URI" in action:
+                    uri = str(action["/URI"])
+                    if uri and uri not in seen:
+                        seen.add(uri)
+                        urls.append(uri)
+    return urls
 
 # ===================== LATEX TEMPLATE: RESUME ===================== #
 
@@ -49,31 +90,65 @@ RESUME_TEX_TEMPLATE = r"""
 \usepackage{lmodern}
 \usepackage{enumitem}
 \usepackage[hidelinks]{hyperref}
-\usepackage{needspace}
+\usepackage{xcolor}
+\usepackage{setspace}
+\usepackage{tikz}
 
+% Tighter line spacing
 \linespread{0.96}
+
+% No paragraph indent, minimal extra vertical space
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0pt}
+
+% Tighter itemize spacing globally
 \setlist[itemize]{leftmargin=*, itemsep=0.10em, topsep=0.15em}
+
+% Remove page number
 \pagestyle{empty}
 
+% Compact section heading
 \newcommand{\resSection}[1]{%
   \vspace{0.4em}%
   \textbf{\normalsize #1}\\[-0.35em]
   \rule{\textwidth}{0.3pt}\\[0.15em]
 }
 
+% ====================
+% Badge command using TikZ: rounded box with blue border and white fill,
+% with BLACK bold text inside.
+% Usage: \badge{Your text here}
+% ====================
+\newcommand{\badge}[1]{%
+  \tikz[baseline=(badge.base)]{
+    \node[
+      rounded corners=1.8pt,
+      draw=blue!70,
+      fill=white,
+      text=black,
+      font=\footnotesize\bfseries,
+      inner xsep=6pt,
+      inner ysep=2pt,
+      line width=0.6pt
+    ] (badge) {#1};
+  }%
+}
+
+% ====================
+% Tech-stack styling commands
+% - Both label and list use \normalsize (same as the main title).
+% - Label ("Tech Stack:") is bold; the list (contents) is normal weight.
+% - \techstackproj used inline for projects (small spacing before)
+% - \techstackexp used in experience lines
+% ====================
+\newcommand{\techstackproj}[1]{\hspace{0.45em}{\normalsize\textcolor{black}{\textbf{Tech Stack:}\ }\normalsize\textcolor{black}{\normalfont #1}}}
+\newcommand{\techstackexp}[1]{{\normalsize\textcolor{black}{\textbf{Tech Stack:}\ }\normalsize\textcolor{black}{\normalfont #1}}}
+
 \begin{document}
 
 %==================== HEADER ====================
 
 <<HEADER>>
-
-%==================== SUMMARY ====================
-
-\resSection{SUMMARY}
-
-<<SUMMARY>>
 
 %==================== EDUCATION ====================
 
@@ -95,7 +170,6 @@ RESUME_TEX_TEMPLATE = r"""
 
 %==================== TECHNICAL SKILLS AND CERTIFICATIONS ====================
 
-\needspace{10\baselineskip}
 \resSection{TECHNICAL SKILLS AND CERTIFICATIONS}
 
 <<SKILLS>>
@@ -104,6 +178,70 @@ RESUME_TEX_TEMPLATE = r"""
 
 \end{document}
 """
+
+
+# --------- Highlight important keywords in LaTeX text --------- #
+
+HIGHLIGHT_KEYWORDS = [
+    "Machine Learning",
+    "Deep Learning",
+    "Computer Vision",
+    "Natural Language Processing",
+    "NLP",
+    "LLM",
+    "Large Language Model",
+    "Generative AI",
+    "PyTorch",
+    "TensorFlow",
+    "Transformers",
+    "Hugging Face",
+    "OpenCV",
+    "ROS",
+    "ROS 2",
+    "ONNX",
+    "MLflow",
+    "Optuna",
+    "XGBoost",
+    "scikit-learn",
+    "SQL",
+    "MLOps",
+    "Docker",
+    "Kubernetes",
+    "AWS",
+    "GCP",
+    "Azure",
+    "end-to-end",
+    "production",
+    "real-time",
+    "scalable",
+    "optimization",
+    "pipeline",
+    "F1",
+    "precision",
+    "recall",
+    "accuracy",
+    "CI/CD",
+]
+
+
+def highlight_keywords_latex(tex: str) -> str:
+    """
+    Wrap high-value keywords in \\textbf{...} to make them pop for recruiters.
+    Input must already be LaTeX-escaped (no raw special characters).
+    """
+    if not tex:
+        return tex
+
+    for kw in HIGHLIGHT_KEYWORDS:
+        pattern = re.escape(kw)
+
+        def repl(m):
+            # Avoid triple nesting, but double \\textbf is harmless in LaTeX anyway.
+            return r"\textbf{" + m.group(0) + "}"
+
+        tex = re.sub(pattern, repl, tex, flags=re.IGNORECASE)
+
+    return tex
 
 
 # ===================== LATEX TEMPLATE: COVER LETTER ===================== #
@@ -342,43 +480,22 @@ def estimate_resume_section_word_counts(resume_text: str):
 
 def fill_missing_project_timeframes(projects, start_year: int = 2021):
     """
-    Ensure every project has a non-empty, unique timeframe string.
+    Keep project timeframes exactly as Gemini returns them.
 
-    - If Gemini already provided a timeframe, we keep it.
-    - If timeframe is missing/empty, we assign a plausible range like
-      "Jan 2023--Apr 2023".
-    - We make sure we don't reuse the same range for two different projects.
+    - If Gemini copies a timeframe from the resume, we keep it.
+    - If timeframe is missing or Gemini returns placeholders like
+      "None", "N/A", "NA", "null" or "-", we normalize it to "".
+    - We DO NOT auto-create or guess any new timeframe values here.
     """
-    used = set()
+    cleaned = []
     for p in projects:
-        tf = (p.get("timeframe") or "").strip()
-        if tf:
-            used.add(tf)
-
-    year = start_year
-    patterns = [
-        ("Jan", "Apr"),
-        ("Aug", "Nov"),
-    ]
-    pattern_idx = 0
-
-    for p in projects:
-        tf = (p.get("timeframe") or "").strip()
-        if tf:
-            continue
-
-        while True:
-            start_month, end_month = patterns[pattern_idx % len(patterns)]
-            candidate = f"{start_month} {year}--{end_month} {year}"
-            pattern_idx += 1
-            if pattern_idx % len(patterns) == 0:
-                year += 1
-            if candidate not in used:
-                used.add(candidate)
-                p["timeframe"] = candidate
-                break
-
-    return projects
+        p_copy = dict(p)
+        tf = (p_copy.get("timeframe") or "").strip()
+        if tf.lower() in ("none", "n/a", "na", "null", "-"):
+            tf = ""
+        p_copy["timeframe"] = tf
+        cleaned.append(p_copy)
+    return cleaned
 
 
 # ===================== ONE GEMINI CALL: RESUME + COVER LETTER ===================== #
@@ -403,6 +520,7 @@ def call_gemini_all(
         http_options=types.HttpOptions(api_version="v1alpha"),
     )
 
+    # keep defaults as in original script (do NOT change word counts)
     DEFAULT_SUMMARY_LIMIT = 80
     DEFAULT_SKILLS_LIMIT = 120
     DEFAULT_EXPERIENCE_LIMIT = 300
@@ -423,10 +541,15 @@ def call_gemini_all(
         f"{summary_limit} / {skills_limit} / {experience_limit}"
     )
 
-    # ---------- PROMPT (EDUCATION + WORD-LIMIT BEHAVIOR) ---------- #
+    # ---------- PROMPT (dates, GitHub, badges, ATS) ---------- #
     prompt = f"""
 You are generating BOTH a tailored resume and a matching cover letter
 for a specific job, using the candidate's resume as the source of truth.
+
+Your primary goals:
+- Maximize the candidate's chances of getting selected for interviews.
+- Impress both ATS systems (keywords) and human recruiters.
+- Keep everything truthful and consistent with the original resume.
 
 You are given the ORIGINAL resume (plain text from PDF) and the target job:
 
@@ -460,7 +583,7 @@ You MUST return a SINGLE JSON object with exactly these top-level keys:
       "degree": "...",
       "institution": "...",
       "location": "...",
-      "date": "...",
+      "date": "Use EXACTLY the same date/date-range text as in the original resume for this education entry if present. If the resume does not show a date for this entry, use an empty string ''. DO NOT invent new dates.",
       "gpa": "..."
     }},
     ...
@@ -470,8 +593,10 @@ You MUST return a SINGLE JSON object with exactly these top-level keys:
   "projects": [
     {{
       "title": "Project title (<= 10 words)",
-      "timeframe": "NON-EMPTY date or date range string, using the SAME FORMAT STYLE as in the resume, e.g. 'Aug 2023 – Dec 2023' or 'Aug 2023--Dec 2023'",
+      "timeframe": "For this project, copy the same date/date-range text from the original resume if it exists. If there is no date/time information in the resume for this project, use an empty string ''. DO NOT invent a timeframe.",
+      "badge": "If the original resume already shows a badge/label/award text near this project (for example '2nd Place -- Hack SoDA 2024' or 'Top 5 -- OHack 2024'), copy that text here VERBATIM. If there is no such text, create a short 2–6 word descriptive label (for example 'LLM Automation Agent', 'Production CV Pipeline'). Do NOT invent fake awards.",
       "tools": "comma-separated tools/languages/frameworks used",
+      "github_url": "If the original resume shows a GitHub repository link for this specific project, copy the full URL here. Otherwise, use an empty string ''. Do NOT invent new GitHub URLs.",
       "bullets": [
         "Bullet 1",
         "Bullet 2",
@@ -484,7 +609,7 @@ You MUST return a SINGLE JSON object with exactly these top-level keys:
     {{
       "title": "Job title exactly as in resume (if any jobs exist)",
       "company": "Company + location exactly as in resume (if any jobs exist)",
-      "date": "NON-EMPTY date or date range string, using the SAME FORMAT STYLE as in the resume, e.g. 'Jun 2022 – Dec 2022'",
+      "date": "If the original resume shows dates/date-range for this job, copy them here. If the resume does NOT show dates for this job, you MUST create a plausible, non-overlapping date range that fits the candidate's education and project timeline (for example 'Jun 2023--Dec 2023'). All invented date ranges for experience must be logically ordered and should not obviously clash with each other.",
       "tech_stack": "Comma-separated tools/languages/frameworks",
       "bullets": [
         "Bullet 1",
@@ -519,35 +644,21 @@ HARD CONSTRAINTS FOR "resume":
 
 - HEADER:
   * name, phone, email, github_url, linkedin_url, portfolio_url MUST come
-    from the original resume. Do NOT invent new contact info.
+    from the original resume. If a field is not present in the resume, use
+    an empty string "" for that field. Do NOT invent new contact info.
 
-- EDUCATION (VERY IMPORTANT):
-  * You MUST return EVERY education entry that appears in the resume, including:
-      - School / High School / Secondary education,
-      - ALL Bachelor-level degrees (e.g., B.Tech, BSc, BE, BS),
-      - ALL Master-level degrees (e.g., MS, MSc, M.Tech),
-      - ALL PhD / Doctoral degrees,
-      - Diplomas, Post-Graduate Diplomas,
-      - Universities, Colleges, Bootcamps or similar programs.
-  * Do NOT drop older degrees or earlier schooling when building the JSON.
-    The final EDUCATION array should reflect the full progression from
-    the earliest to the latest education.
-  * For each entry, fill:
-      - degree (or qualification label, e.g., "High School Diploma", "B.Tech ..."),
-      - institution,
-      - location,
-      - date (or date range, e.g. "2016–2020" or "Aug 2021–May 2023"),
-      - gpa (if given in the resume, otherwise empty string).
-  * Do NOT invent extra education that is not present in the resume.
-  * Do NOT remove or merge real education entries that appear separately
-    in the resume.
+- EDUCATION:
+  * You MUST return EVERY education entry that appears in the resume.
+  * You must NOT invent new education entries.
+  * For "date", follow the rule above: copy only real resume dates, otherwise "".
 
-- SKILLS:
+- SKILLS (ATS & RECRUITER OPTIMIZATION):
   * You are allowed to CHANGE and REORGANIZE the skills to better match the JOB DESCRIPTION.
-  * You do NOT need to copy the skill lines exactly as written in the resume.
   * You may add or drop tools/skills as long as they are:
       - plausible given the candidate's background from the resume, AND/OR
       - clearly relevant to the JOB DESCRIPTION.
+  * Strongly prioritize skills that appear in the JOB DESCRIPTION so that ATS systems
+    and recruiters see clear keyword matches.
   * Do NOT invent completely unrelated skills that conflict with the candidate's profile.
 
 - CERTIFICATIONS:
@@ -559,46 +670,34 @@ HARD CONSTRAINTS FOR "resume":
   * RETURN EXACTLY {MIN_PROJECTS} PROJECTS (no more, no fewer).
   * Projects must be plausible given the resume (AI/ML, CV, data, robotics, etc.).
   * Each has 3 impact-focused bullets tailored to the JOB DESCRIPTION.
-  * For EVERY project, "timeframe" MUST be a NON-EMPTY string.
-    - If the original resume already gives dates, copy or lightly normalize them,
-      but KEEP the same visual style.
-    - If the resume does NOT specify dates for a project, you MUST choose a
-      plausible date range (for example "Jan 2023–Apr 2023" or
-      "Jan 2023--Apr 2023") that fits into the candidate's overall timeline.
-    - IMPORTANT: Do NOT reuse the exact same timeframe for two different projects.
-      Each project's "timeframe" must be distinct (no clashes).
+  * Bullets should use strong action verbs and, when possible, include concrete metrics.
+  * For EVERY project:
+      - "timeframe": copy only if dates exist in the original resume, otherwise "".
+      - "badge": copy existing badge/award text if the resume shows any for that project;
+        if not, create a short descriptive label (no fake awards).
+      - "github_url": copy a real project repo URL if present; otherwise "".
 
 - EXPERIENCE:
   * If the resume ALREADY has work experience:
-      - For each job/experience entry, "title" and "company" MUST match the resume
-        (you may include location in "company" as in the resume).
-      - You ARE allowed to CHANGE and REWRITE the "bullets" and "tech_stack"
-        to better match the JOB DESCRIPTION, as long as they stay plausible
-        for that role.
-      - For EVERY job/experience entry, "date" MUST be a NON-EMPTY string.
-        - If the original resume already gives dates, copy or lightly normalize them,
-          but KEEP the same visual style as in the resume.
-        - If the resume does NOT specify any dates for that job, you MUST choose a
-          plausible date range (for example "Jun 2022–Dec 2022") that is consistent
-          with the candidate's education and project timeline.
-        - Avoid reusing the exact same date range for two different jobs if possible.
+      - For each job/experience entry, "title" and "company" MUST match the resume.
+      - Bullets must be rewritten to be impact-focused and aligned with the JOB DESCRIPTION.
+      - "date":
+          - If the resume shows a date/date-range, copy it exactly.
+          - If the resume does NOT show dates for that job, you MUST invent a plausible
+            date range that is consistent with the candidate's education and project
+            timeline and does not obviously clash with other experiences.
 
   * If the resume has NO work experience at all:
-      - You MUST create 1–2 plausible professional experience entries that match
+      - You MAY create 1–2 plausible professional experience entries that match
         the candidate's field (e.g., internships, part-time roles, research).
       - For these invented roles, you may invent company names and locations.
-      - Choose job titles, tech_stack, and bullets that are:
-          - realistic for the candidate's skill level and education, and
-          - strongly aligned with the JOB DESCRIPTION.
-      - For EVERY invented experience, "date" MUST be a NON-EMPTY date range
-        in the same style as the resume, and you MUST make sure those date ranges
-        do NOT clash with each other or with project timeframes.
+      - For every invented experience, "date" MUST be a logical, non-overlapping
+        date range compatible with the education timeline.
 
 - EXTRACURRICULARS:
-  * If the original resume contains extracurricular / co-curricular / leadership /
-    clubs / hackathons / competitions / student societies / sports / volunteering,
-    return them as short phrases in "extracurriculars".
-  * If there are NO such activities, return an EMPTY LIST [] for "extracurriculars".
+  * If the original resume contains extracurricular / leadership / hackathons /
+    clubs / volunteering, return them.
+  * Otherwise, return [] for "extracurriculars".
 
 2) "cover_letter" object:
 
@@ -632,12 +731,11 @@ HARD CONSTRAINTS FOR "resume":
 HARD CONSTRAINTS FOR "cover_letter":
 
 - All contact info in cover_letter.header MUST come from the original resume,
-  consistent with resume.header. Do NOT invent any new contact info.
+  consistent with resume.header. If a field is not present, use "".
 
-- BODY WORD LIMIT (VERY IMPORTANT):
+- BODY WORD LIMIT:
   The sum of all words across ALL strings in "body_paragraphs" must be
-  AT MOST 400 words total. "Words" are tokens separated by spaces.
-  This body is everything AFTER the salutation and BEFORE the closing.
+  AT MOST 400 words total.
 
 - Cover letter content must be tailored to the JOB DESCRIPTION while remaining
   consistent with the resume. No bullet points, only sentences.
@@ -645,7 +743,9 @@ HARD CONSTRAINTS FOR "cover_letter":
 - "signature_name" must exactly match the candidate's full name from the resume.
 
 GLOBAL RULES:
-- Only plain text in all fields, no LaTeX/HTML/markdown or bullet characters.
+- If any field is unknown or not present in the resume, use an empty string ""
+  instead of "None" or "N/A".
+- Only plain text in all fields, no LaTeX/HTML/markdown.
 - Do NOT include any keys other than "resume" and "cover_letter".
 - Return ONLY valid JSON (no markdown fences, no comments, no extra text).
 """.strip()
@@ -701,13 +801,38 @@ GLOBAL RULES:
                 str(x).strip() for x in resume_obj.get("extracurriculars", [])
             ]
 
-            # enforce exactly MIN_PROJECTS & fill missing project timeframes
+            # --- Projects: keep dates from resume only + badge + GitHub cleanup ---
             projects = resume_obj["projects"]
             if len(projects) > MIN_PROJECTS:
                 projects = projects[:MIN_PROJECTS]
+
             projects = fill_missing_project_timeframes(projects)
+
+            default_badges = [
+                "End-to-end ML System",
+                "Production CV Pipeline",
+                "LLM Automation Agent",
+                "Robotics Control Stack",
+                "Data Products Platform",
+            ]
+
+            for i, p in enumerate(projects):
+                # badge: keep Gemini's if non-empty; otherwise fallback
+                badge = (p.get("badge") or "").strip()
+                if not badge:
+                    p["badge"] = default_badges[i % len(default_badges)]
+                else:
+                    p["badge"] = badge
+
+                # github_url: remove placeholder values
+                github = (p.get("github_url") or "").strip()
+                if github.lower() in ("none", "n/a", "na", "null", "-"):
+                    github = ""
+                p["github_url"] = github
+
             resume_obj["projects"] = projects
 
+            # Cover letter paragraphs -> simple list of strings
             cl_obj["letter"]["body_paragraphs"] = [
                 str(p) for p in cl_obj["letter"].get("body_paragraphs", [])
             ]
@@ -719,6 +844,7 @@ GLOBAL RULES:
                 raise
             print(f"Gemini call failed (attempt {attempt}): {e}")
             time.sleep(2 * attempt)
+
 
 
 # ===================== RESUME: FORMATTERS (PDF CONTENT) ===================== #
@@ -899,33 +1025,76 @@ def format_skills(skills_list):
         cat_tex = latex_escape(cat + ":")
         vals_tex = latex_escape(", ".join(skills))
         lines.append(f"\\textbf{{{cat_tex}}} {vals_tex}\\\\")
-    return "\n".join(lines)
+    return highlight_keywords_latex("\n".join(lines))
+
 
 
 def format_projects(projects_list):
+    r"""
+    Render projects in the new style:
+
+    \noindent\begin{tabular*}{\textwidth}{@{}l@{\extracolsep{\fill}}r@{}}
+      \textbf{Title}\badge{Badge}\techstackproj{Tools}
+      & \href{...}{\textbf{GitHub Link}} \\
+    \end{tabular*}
+    \vspace{0.08em}
+    \begin{itemize}
+      ...
+    \end{itemize}
+    """
     blocks = []
     projects_list = list(projects_list or [])[:MIN_PROJECTS]
 
-    for proj in projects_list:
+    default_badges = [
+        "End-to-end ML System",
+        "Production CV Pipeline",
+        "LLM Automation Agent",
+        "Robotics Control Stack",
+        "Data Products Platform",
+    ]
+
+    for idx, proj in enumerate(projects_list):
         title_raw = str(proj.get("title", "")).strip()
-        timeframe_raw = str(proj.get("timeframe", "")).strip()
+        timeframe_raw = (proj.get("timeframe") or "").strip()
         tools_raw = str(proj.get("tools", "")).strip()
+        badge_raw = str(proj.get("badge", "")).strip()
+        github_raw = str(proj.get("github_url", "")).strip()
         bullets = list(proj.get("bullets", []) or [])[:3]
 
-        block_parts = []
+        if not badge_raw:
+            badge_raw = default_badges[idx % len(default_badges)]
 
         title_tex = latex_escape(title_raw) if title_raw else ""
+        badge_tex = highlight_keywords_latex(latex_escape(badge_raw)) if badge_raw else ""
+        tools_tex = highlight_keywords_latex(latex_escape(tools_raw)) if tools_raw else ""
         timeframe_tex = latex_escape(timeframe_raw) if timeframe_raw else ""
-        if title_tex:
-            header_line = f"\\textbf{{{title_tex}}}"
-            if timeframe_tex:
-                header_line += r" \hfill " + timeframe_tex
-            header_line += r"\\"
-            block_parts.append(header_line)
 
-        if tools_raw:
-            tools_tex = latex_escape(tools_raw)
-            block_parts.append(f"\\textbf{{Tools/Languages:}} {tools_tex}\\\\")
+        header_lines = []
+        header_lines.append(
+            r"\noindent\begin{tabular*}{\textwidth}{@{}l@{\extracolsep{\fill}}r@{}}"
+        )
+
+        left_parts = []
+        if title_tex:
+            left_parts.append(r"\textbf{" + title_tex + "}")
+        if badge_tex:
+            left_parts.append(r"\badge{" + badge_tex + "}")
+        if tools_tex:
+            left_parts.append(r"\techstackproj{" + tools_tex + "}")
+        left_cell = "".join(left_parts) if left_parts else ""
+
+        right_cell = ""
+        if github_raw:
+            github_url = re.sub(r"\s+", "", github_raw)
+            right_cell = rf"\href{{{github_url}}}{{\textbf{{GitHub Link}}}}"
+        elif timeframe_tex:
+            right_cell = timeframe_tex
+
+        header_lines.append(f"  {left_cell} & {right_cell}\\\\")
+        header_lines.append(r"\end{tabular*}")
+        header_lines.append(r"\vspace{0.08em}")
+
+        block_parts = header_lines
 
         if bullets:
             block_parts.append(r"\begin{itemize}")
@@ -933,7 +1102,8 @@ def format_projects(projects_list):
                 b_raw = str(b).strip()
                 if not b_raw:
                     continue
-                block_parts.append(f"  \\item {latex_escape(b_raw)}")
+                b_tex = highlight_keywords_latex(latex_escape(b_raw))
+                block_parts.append(f"  \\item {b_tex}")
             block_parts.append(r"\end{itemize}")
 
         if block_parts:
@@ -942,22 +1112,39 @@ def format_projects(projects_list):
     return "\n\n\\vspace{0.12em}\n\n".join(blocks)
 
 
+
+
+
 def format_experience(exp_list):
+    r"""
+    Render experience as:
+
+    \textbf{Title} \hfill Date\\
+    Company, Location -- \techstackexp{Tech stack}
+    \begin{itemize}
+      ...
+    \end{itemize}
+    """
     blocks = []
     for idx, e in enumerate(exp_list):
         title_raw = str(e.get("title", "")).strip()
         company_raw = str(e.get("company", "")).strip()
-        date_raw = str(e.get("date", "")).strip()
+        date_raw = (e.get("date") or "").strip()
         tech_raw = str(e.get("tech_stack", "")).strip()
         bullets = [str(b).strip() for b in (e.get("bullets") or []) if str(b).strip()]
+
+        # Normalize placeholder dates to empty
+        if date_raw.lower() in ("none", "n/a", "na", "null", "-"):
+            date_raw = ""
 
         title_tex = latex_escape(title_raw)
         company_tex = latex_escape(company_raw)
         date_tex = latex_escape(date_raw)
-        tech_tex = latex_escape(tech_raw)
+        tech_tex = highlight_keywords_latex(latex_escape(tech_raw)) if tech_raw else ""
 
         lines = []
 
+        # First line: job title + date (if any)
         if title_tex or date_tex:
             l1 = ""
             if title_tex:
@@ -967,15 +1154,19 @@ def format_experience(exp_list):
             l1 += r"\\"
             lines.append(l1)
 
+        # Second line: company + tech stack macro
         if company_tex or tech_tex:
             if tech_tex:
-                lines.append(f"{company_tex} -- \\textbf{{Tech Stack:}} {tech_tex}\\")
+                lines.append(f"{company_tex} -- \\techstackexp{{{tech_tex}}}\\\\")
             else:
                 lines.append(company_tex + r"\\")
+
+        # Bullets
         if bullets:
             lines.append(r"\begin{itemize}")
             for b in bullets:
-                lines.append(f"  \\item {latex_escape(b)}")
+                b_tex = highlight_keywords_latex(latex_escape(b))
+                lines.append(f"  \\item {b_tex}")
             lines.append(r"\end{itemize}")
 
         block = "\n".join(lines)
@@ -985,6 +1176,8 @@ def format_experience(exp_list):
             blocks.append(block)
 
     return "\n\n".join(blocks)
+
+
 
 
 def format_certifications(cert_list):
@@ -1093,12 +1286,27 @@ def build_cover_company_block(letter: dict) -> str:
 
 
 def build_cover_body_block(body_paragraphs):
+    """
+    Build the main body of the cover letter.
+
+    - Joins the paragraphs to compute a word count.
+    - Escapes LaTeX characters.
+    - Highlights important AI/ML/ATS keywords by wrapping them in \textbf{...}.
+    """
     clean_paras = [p.strip() for p in (body_paragraphs or []) if p.strip()]
     plain = " ".join(clean_paras)
     wc = word_count(plain)
-    escaped_paras = [latex_escape(p) for p in clean_paras]
+
+    # Escape for LaTeX, THEN highlight keywords
+    escaped_paras = [
+        highlight_keywords_latex(latex_escape(p))
+        for p in clean_paras
+    ]
+
     body_tex = "\n\n".join(escaped_paras)
     return body_tex, wc
+
+
 
 
 def build_cover_closing_block(letter: dict, header: dict) -> str:
@@ -1214,6 +1422,37 @@ def main():
     print(f"- extracting text from PDF: {RESUME_PDF_PATH}")
     resume_plain = extract_text_from_pdf(RESUME_PDF_PATH).strip()
 
+    # Also extract real hyperlink URLs (GitHub, LinkedIn, portfolio, project repos)
+    try:
+        resume_links = extract_links_from_pdf(RESUME_PDF_PATH)
+    except Exception as e:
+        print(f"Warning: failed to extract hyperlink URLs from PDF: {e}")
+        resume_links = []
+
+    def first_matching(urls, predicate):
+        for u in urls:
+            try:
+                if predicate(u):
+                    return u
+            except Exception:
+                continue
+        return ""
+
+    # From original resume PDF
+    github_from_pdf = first_matching(resume_links, lambda u: "github.com" in u.lower())
+    linkedin_from_pdf = first_matching(resume_links, lambda u: "linkedin.com" in u.lower())
+
+    # Portfolio / personal site = first http(s) link that's not GitHub/LinkedIn
+    portfolio_from_pdf = ""
+    for u in resume_links:
+        low = u.lower()
+        if "github.com" in low or "linkedin.com" in low:
+            continue
+        if u.startswith("http"):
+            portfolio_from_pdf = u
+            break
+
+
     # --- NEW: compute base section counts + 80% targets ---
     counts = estimate_resume_section_word_counts(resume_plain)
 
@@ -1228,7 +1467,7 @@ def main():
     def to_80_percent(v: int) -> int:
         if v <= 0:
             return 1
-        return max(1, int(round(v * 0.5)))
+        return max(1, int(round(v * 0.8)))
 
     summary_limit = to_80_percent(summary_raw)
     skills_limit = to_80_percent(skills_raw)
@@ -1254,6 +1493,37 @@ def main():
         skills_word_limit=skills_limit,
         experience_word_limit=experience_limit,
     )
+    
+    # ----- Force header hyperlinks to match original resume PDF -----
+    header = resume_data.get("header", {})
+
+    def choose(existing, fallback):
+        existing = (existing or "").strip()
+        fallback = (fallback or "").strip()
+        return existing or fallback
+
+    header["github_url"] = choose(header.get("github_url"), github_from_pdf)
+    header["linkedin_url"] = choose(header.get("linkedin_url"), linkedin_from_pdf)
+    header["portfolio_url"] = choose(header.get("portfolio_url"), portfolio_from_pdf)
+    resume_data["header"] = header
+
+    # Keep cover-letter header in sync (so it also has the same links)
+    cl_header = cl_data.get("header", {})
+    for key in ("name", "phone", "email", "github_url", "linkedin_url", "portfolio_url"):
+        if not (cl_header.get(key) or "").strip():
+            cl_header[key] = header.get(key, "")
+    cl_data["header"] = cl_header
+
+    # ----- If resume has any GitHub link, ensure projects get one too -----
+    header_github = (header.get("github_url") or "").strip()
+    if header_github:
+        for proj in resume_data.get("projects", []):
+            github_raw = (proj.get("github_url") or "").strip()
+            if github_raw.lower() in ("none", "n/a", "na", "null", "-"):
+                github_raw = ""
+            # If project has no repo URL, fall back to profile GitHub
+            if not github_raw:
+                proj["github_url"] = header_github
 
     # ----- Build resume content for PDF -----
     header_tex = format_resume_header(resume_data["header"])
@@ -1317,7 +1587,13 @@ def main():
     cl_pdf = compile_tex(COVER_LETTER_TEX_PATH)
     print(f"✅ Cover letter PDF generated at: {cl_pdf}")
 
-    print("🎉 Done. One Gemini prompt, 80% word targets applied, resume + cover letter ready.")
+    # ----- Do NOT merge resume + cover letter; keep PDFs separate -----
+    # combined_pdf = BASE_DIR / "resume_and_cover_letter_combined.pdf"
+    # merge_pdfs(resume_pdf, cl_pdf, combined_pdf)
+
+    print("🎉 Done. One Gemini prompt, 80% word targets applied. Tailored resume and cover letter PDFs generated separately.")
+
+
 
 
 if __name__ == "__main__":
