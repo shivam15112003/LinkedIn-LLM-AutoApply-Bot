@@ -1,0 +1,4 @@
+selenium
+PyPDF2
+pyttsx3
+google-genai
