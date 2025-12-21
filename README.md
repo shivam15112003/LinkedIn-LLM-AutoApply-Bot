@@ -52,6 +52,7 @@
 ├── gemini_actions.py             # Gemini/LLM helper utilities (if used separately)
 ├── resume_and_cover_maker2.py    # resume + cover-letter generation (LLM-backed)
 ├── record_web_actions_firefox.py # optional Firefox-based macro recorder
+├── linkedin_auto_apply_bot_presentation.pptx  # project presentation (slides + demo)
 ├── README.md
 ├── METHODOLOGY.md
 ├── HOW_TO_USE.md
