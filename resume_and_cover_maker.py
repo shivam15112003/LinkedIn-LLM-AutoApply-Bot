@@ -146,15 +146,22 @@ RESUME_TEX_TEMPLATE = r"""
 
 \begin{document}
 
-%==================== HEADER ====================
+%==================== HEADER =====================
 
 <<HEADER>>
+
+%==================== SUMMARY ====================
+
+\resSection{SUMMARY}
+
+<<SUMMARY>>
 
 %==================== EDUCATION ====================
 
 \resSection{EDUCATION}
 
 <<EDUCATION>>
+
 
 %==================== PROFESSIONAL EXPERIENCE ====================
 
@@ -941,7 +948,8 @@ def format_education(education_list):
 
 
 def format_summary(summary: str) -> str:
-    return latex_escape(summary.strip())
+    return highlight_keywords_latex(latex_escape(summary.strip()))
+
 
 
 def format_skills(skills_list):
