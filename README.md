@@ -8,6 +8,17 @@
 > LLM-tailored resume & cover letter + LLM-guided UI interaction using safe click/type actions only.
 
 ---
+## 📘 Demo & Presentation
+
+- 🎬 **Watch the demo video (LinkedIn)** — see the bot in action (login → search → generate tailored resume → apply flow):  
+  https://www.linkedin.com/posts/ss1511_artificialintelligence-python-generativeai-activity-7408413956794486784-3F5z?utm_source=share&utm_medium=member_desktop&rcm=ACoAADOiEBcBfeZohokyDTXwG0fo2BslAbJFwUk
+
+- 📁 **Presentation (PPTX)**  
+  I’ve uploaded the project presentation to this repository as:  
+  `linkedin_auto_apply_bot_presentation.pptx`  
+  (Open it to see slide-by-slide architecture, demo placeholder, and usage instructions.)
+
+---
 
 ## ✨ What This Bot Does
 
@@ -90,17 +101,7 @@ You can tune prompts (in `resume_and_cover_maker2.py` and Gemini helpers) to fit
 
 ---
 
-## 📘 Demo & Presentation
 
-- 🎬 **Watch the demo video (LinkedIn)** — see the bot in action (login → search → generate tailored resume → apply flow):  
-  https://www.linkedin.com/posts/ss1511_artificialintelligence-python-generativeai-activity-7408413956794486784-3F5z?utm_source=share&utm_medium=member_desktop&rcm=ACoAADOiEBcBfeZohokyDTXwG0fo2BslAbJFwUk
-
-- 📁 **Presentation (PPTX)**  
-  I’ve uploaded the project presentation to this repository as:  
-  `linkedin_auto_apply_bot_presentation.pptx`  
-  (Open it to see slide-by-slide architecture, demo placeholder, and usage instructions.)
-
----
 
 ## 🔒 Security & Keys
 
