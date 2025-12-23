@@ -36,6 +36,203 @@ JOB_DESC_PATH = BASE_DIR / "job.txt"
 
 RESUME_TEX_PATH = BASE_DIR / "resume_generated.tex"
 COVER_LETTER_TEX_PATH = BASE_DIR / "cover_letter_generated.tex"
+def extract_original_projects_with_badges(resume_text: str, max_projects: int = MIN_PROJECTS) -> list:
+    """
+    Extracts candidate project title lines and (optionally) a short badge
+    that appears near the title in the original resume plain text.
+
+    Heuristic:
+    - Find the Projects section.
+    - Walk lines, collect candidate title lines (non-bulleted, non-empty).
+    - For each candidate title, look at the next 1-2 non-empty lines: if one
+      is short (<= 60 chars), not a bullet, and looks like a label (few words,
+      may contain parentheses or dashes), treat it as the badge (blue box).
+    - Return list of dicts: [{"title": "...", "badge": "..."}] up to max_projects.
+    """
+    if not resume_text:
+        return []
+
+    lines = resume_text.splitlines()
+    norm_lines = [_normalize_heading_line(l) for l in lines]
+
+    project_heading_keys = {"ACADEMIC PROJECTS", "PROJECTS", "PERSONAL PROJECTS", "RELEVANT PROJECTS", "PROJECT"}
+    all_heading_keywords = [
+        "SUMMARY", "EDUCATION", "PROFESSIONAL EXPERIENCE", "EXPERIENCE", "WORK EXPERIENCE",
+        "ACADEMIC PROJECTS", "PROJECTS", "PERSONAL PROJECTS", "TECHNICAL SKILLS",
+        "SKILLS", "CERTIFICATIONS", "EXTRACURRICULAR", "AWARDS", "PUBLICATIONS"
+    ]
+    all_keys = {k.upper() for k in all_heading_keywords}
+
+    # find start of projects section
+    start_idx = None
+    for i, nl in enumerate(norm_lines):
+        if any(_heading_matches(nl, key) for key in project_heading_keys):
+            start_idx = i + 1
+            break
+    if start_idx is None:
+        return []
+
+    # find end of projects section
+    end_idx = len(lines)
+    for j in range(start_idx, len(lines)):
+        nl = norm_lines[j]
+        if not nl:
+            continue
+        if any(_heading_matches(nl, key) for key in all_keys if key not in project_heading_keys):
+            end_idx = j
+            break
+
+    section_lines = [lines[i].rstrip() for i in range(start_idx, end_idx)]
+
+    candidates = []
+    i = 0
+    while i < len(section_lines) and len(candidates) < max_projects:
+        ln = section_lines[i].strip()
+        if not ln:
+            i += 1
+            continue
+        # skip bullet lines
+        if re.match(r"^[-\u2022\*\d\.\)]+\s+", ln):
+            i += 1
+            continue
+        # skip obvious meta lines like 'Tools:' or long narrative lines (>120 chars)
+        if re.match(r"^(tools?|tech|tech stack|stack):", ln.strip().lower()):
+            i += 1
+            continue
+        if len(ln) > 140:
+            # probably paragraph text, skip
+            i += 1
+            continue
+
+        # Candidate title found — look ahead 1-2 lines for a badge/label
+        badge = ""
+        look_ahead = 1
+        for k in range(1, 3):
+            if i + k >= len(section_lines):
+                break
+            next_ln = section_lines[i + k].strip()
+            if not next_ln:
+                continue
+            # skip bullets
+            if re.match(r"^[-\u2022\*\d\.\)]+\s+", next_ln):
+                continue
+            # if short enough and not a long sentence, treat as badge
+            if len(next_ln) <= 60 and len(next_ln.split()) <= 8:
+                # ignore if it clearly looks like "Tools: ..." or "Tech Stack"
+                if not re.match(r"^(tools?|tech|tech stack|stack):", next_ln.strip().lower()):
+                    badge = next_ln
+                    break
+            # otherwise not a badge
+            break
+
+        candidates.append({"title": ln, "badge": badge})
+        i += 1 if badge == "" else (1 + k)  # skip past badge if we consumed it
+
+    # Deduplicate by title text, preserve order, limit to max_projects
+    seen = set()
+    result = []
+    for c in candidates:
+        t = re.sub(r"\s+", " ", c["title"]).strip()
+        if not t or t.lower() in seen:
+            continue
+        result.append({"title": t, "badge": c["badge"].strip() if c.get("badge") else ""})
+        seen.add(t.lower())
+        if len(result) >= max_projects:
+            break
+
+    return result
+
+def extract_resume_summary_text(resume_text: str) -> str:
+    """
+    Extract the SUMMARY section text from the original resume (plain text).
+    Uses the same heading-detection logic as estimate_resume_section_word_counts.
+
+    Returns the raw text found under the SUMMARY heading, or an empty string
+    if no SUMMARY section is detected.
+    """
+    if not resume_text:
+        return ""
+
+    all_heading_keywords = [
+        "SUMMARY",
+        "EDUCATION",
+        "PROFESSIONAL EXPERIENCE",
+        "EXPERIENCE",
+        "WORK EXPERIENCE",
+        "ACADEMIC PROJECTS",
+        "PROJECTS",
+        "PERSONAL PROJECTS",
+        "TECHNICAL SKILLS",
+        "TECHNICAL SKILLS AND CERTIFICATIONS",
+        "SKILLS",
+        "CERTIFICATIONS",
+        "EXTRACURRICULAR",
+        "EXTRA CURRICULAR",
+        "EXTRA-CURRICULAR",
+        "AWARDS",
+        "HONORS",
+        "PUBLICATIONS",
+        "COURSEWORK",
+        "PERSONAL DETAILS",
+        "CONTACT",
+        "INTERESTS",
+    ]
+
+    lines = resume_text.splitlines()
+    norm_lines = [_normalize_heading_line(l) for l in lines]
+
+    # Target only the SUMMARY heading
+    target_keys = ["SUMMARY"]
+    target_keys = [k.upper() for k in target_keys if k]
+    all_keys = [k.upper() for k in all_heading_keywords if k]
+
+    # 1) find start of SUMMARY section
+    start_idx = None
+    for i, norm in enumerate(norm_lines):
+        for key in target_keys:
+            if _heading_matches(norm, key):
+                start_idx = i + 1  # content is expected after the heading line
+                break
+        if start_idx is not None:
+            break
+
+    if start_idx is None:
+        return ""
+
+    # 2) find end of SUMMARY section (next heading)
+    end_idx = len(lines)
+    for j in range(start_idx, len(lines)):
+        norm = norm_lines[j]
+        if not norm:
+            # skip blank lines when searching for next heading
+            continue
+        for key in all_keys:
+            if _heading_matches(norm, key):
+                end_idx = j
+                break
+        if end_idx != len(lines):
+            break
+
+    raw_section = "\n".join(lines[start_idx:end_idx]).strip()
+    return raw_section
+
+def normalize_http_url(url: str) -> str:
+    """
+    Clean up any GitHub-style URL and make sure it is a valid http(s) link.
+    - strips whitespace
+    - removes internal spaces
+    - adds https:// if missing
+    """
+    if not url:
+        return ""
+    url = re.sub(r"\s+", "", str(url))  # remove spaces/newlines
+    if not url:
+        return ""
+    if not re.match(r"^https?://", url, re.IGNORECASE):
+        url = "https://" + url
+    return url
+
+
 
 def merge_pdfs(resume_pdf: Path, cover_pdf: Path, output_path: Path) -> Path:
     """
@@ -186,6 +383,7 @@ RESUME_TEX_TEMPLATE = r"""
 \end{document}
 """
 
+# --------- Highlight important keywords in LaTeX text --------- #
 
 # --------- Highlight important keywords in LaTeX text --------- #
 
@@ -230,25 +428,58 @@ HIGHLIGHT_KEYWORDS = [
     "CI/CD",
 ]
 
+# Protect URLs/emails from being modified by the highlighter
+PROTECTED_REGEX = re.compile(
+    r"(https?://[^\s]+|[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})"
+)
 
-def highlight_keywords_latex(tex: str) -> str:
+def _highlight_segment(segment: str) -> str:
     """
-    Wrap high-value keywords in \\textbf{...} to make them pop for recruiters.
-    Input must already be LaTeX-escaped (no raw special characters).
+    Apply keyword bolding to a text segment that does NOT contain
+    URLs/emails (those are stripped out before calling this).
     """
-    if not tex:
-        return tex
+    if not segment:
+        return segment
 
     for kw in HIGHLIGHT_KEYWORDS:
         pattern = re.escape(kw)
 
         def repl(m):
-            # Avoid triple nesting, but double \\textbf is harmless in LaTeX anyway.
+            # Double \\textbf is harmless in LaTeX.
             return r"\textbf{" + m.group(0) + "}"
 
-        tex = re.sub(pattern, repl, tex, flags=re.IGNORECASE)
+        segment = re.sub(pattern, repl, segment, flags=re.IGNORECASE)
 
-    return tex
+    return segment
+
+
+def highlight_keywords_latex(tex: str) -> str:
+    """
+    Wrap high-value keywords in \\textbf{...}.
+
+    Input must already be LaTeX-escaped (no raw special characters).
+    We intentionally avoid touching URL/email substrings so that they
+    can later be safely wrapped in \\href{...}{...}.
+    """
+    if not tex:
+        return tex
+
+    parts = []
+    last_end = 0
+    for m in PROTECTED_REGEX.finditer(tex):
+        # normal text before the protected token
+        if m.start() > last_end:
+            parts.append(_highlight_segment(tex[last_end:m.start()]))
+        # the protected token itself (URL/email) is copied verbatim
+        parts.append(m.group(0))
+        last_end = m.end()
+
+    # trailing text
+    if last_end < len(tex):
+        parts.append(_highlight_segment(tex[last_end:]))
+
+    return "".join(parts)
+
 
 
 # ===================== LATEX TEMPLATE: COVER LETTER ===================== #
@@ -309,6 +540,58 @@ def latex_escape(text: str) -> str:
         "^": r"\textasciicircum{}",
     }
     return "".join(replacements.get(c, c) for c in text)
+
+# Detect URLs + emails in LaTeX-safe text
+URL_REGEX = re.compile(r"(https?://[^\s{}]+)")
+EMAIL_REGEX = re.compile(
+    r"(?<!mailto:)([A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})"
+)
+
+def _unescape_for_url(s: str) -> str:
+    """
+    Undo the minimal escaping we do in `latex_escape` so the hyperlink
+    destination is a real URL/email, while the label stays LaTeX-escaped.
+    """
+    # Order matters for the multi-character sequences
+    replacements = [
+        (r"\textasciitilde{}", "~"),
+        (r"\textasciicircum{}", "^"),
+        (r"\_", "_"),
+        (r"\%", "%"),
+        (r"\#", "#"),
+        (r"\&", "&"),
+        (r"\$", "$"),
+        (r"\{", "{"),
+        (r"\}", "}"),
+    ]
+    for latex, plain in replacements:
+        s = s.replace(latex, plain)
+    return s
+
+
+def auto_linkify_latex(tex: str) -> str:
+    """
+    Find raw http(s) URLs and plain email addresses in already
+    LaTeX-escaped text and wrap them in \\href{...}{...} so they
+    are clickable in the generated PDF.
+    """
+    if not tex:
+        return tex
+
+    def _url_repl(m: re.Match) -> str:
+        url_tex = m.group(1)             # LaTeX-escaped URL (label)
+        url_plain = _unescape_for_url(url_tex)  # real URL for destination
+        return rf"\href{{{url_plain}}}{{{url_tex}}}"
+
+    def _email_repl(m: re.Match) -> str:
+        email_tex = m.group(1)
+        email_plain = _unescape_for_url(email_tex)
+        return rf"\href{{mailto:{email_plain}}}{{{email_tex}}}"
+
+    # First URLs, then plain emails
+    tex = URL_REGEX.sub(_url_repl, tex)
+    tex = EMAIL_REGEX.sub(_email_repl, tex)
+    return tex
 
 
 def word_count(text: str) -> int:
@@ -514,13 +797,13 @@ def call_gemini_all(
     summary_word_limit=None,
     skills_word_limit=None,
     experience_word_limit=None,
+    generate_summary: bool = True,
 ):
     """
     Single prompt that returns BOTH resume + cover letter JSON.
 
-    Word limits:
-    - summary_word_limit, skills_word_limit, experience_word_limit
-      are ~80% of the original section lengths (computed in main()).
+    If generate_summary==False, the prompt will instruct Gemini to return an
+    empty string for the resume.summary field (so it does not generate one).
     """
     client = genai.Client(
         api_key=api_key,
@@ -547,6 +830,21 @@ def call_gemini_all(
         f"- using resume section word limits (75% targets) summary/skills/experience: "
         f"{summary_limit} / {skills_limit} / {experience_limit}"
     )
+
+    # Build conditional summary instruction so Gemini doesn't generate it if not desired
+    if generate_summary:
+        summary_instruction = f"""
+  * SUMMARY:
+      - Target around {summary_limit} words in total for the "summary" string.
+"""
+    else:
+        # Explicit, short instruction: do not spend tokens generating a summary.
+        summary_instruction = """
+  * SUMMARY:
+      - DO NOT generate, rewrite, or invent a summary. Return the "summary"
+        field as an empty string "" in the resume JSON. The calling code will
+        reuse the original PDF summary if present.
+"""
 
     # ---------- PROMPT (dates, GitHub, badges, ATS) ---------- #
     prompt = f"""
@@ -595,7 +893,7 @@ You MUST return a SINGLE JSON object with exactly these top-level keys:
     }},
     ...
   ],
-  "summary": "...",
+{summary_instruction}
   "skills": [ "...", "...", ... ],
   "projects": [
     {{
@@ -637,9 +935,6 @@ HARD CONSTRAINTS FOR "resume":
     These values are approximately 80% of the word counts in the ORIGINAL resume.
     Do NOT exceed them by more than ~10–15%, and avoid going much shorter
     than ~70% of them.
-
-  * SUMMARY:
-      - Target around {summary_limit} words in total for the "summary" string.
 
   * SKILLS:
       - Across ALL strings in the "skills" list, target around {skills_limit} words
@@ -854,6 +1149,7 @@ GLOBAL RULES:
 
 
 
+
 # ===================== RESUME: FORMATTERS (PDF CONTENT) ===================== #
 
 def format_resume_header(header: dict) -> str:
@@ -884,8 +1180,10 @@ def format_resume_header(header: dict) -> str:
     if phone_tex:
         parts.append(phone_tex)
     if email:
+        # clickable email hypertext
         parts.append(rf"\href{{mailto:{email}}}{{{email_tex}}}")
     if github_url:
+        # clickable "github.com/username" text
         parts.append(rf"\href{{{github_url}}}{{{label(github_url)}}}")
     if linkedin_url:
         parts.append(rf"\href{{{linkedin_url}}}{{{label(linkedin_url)}}}")
@@ -900,6 +1198,8 @@ def format_resume_header(header: dict) -> str:
         lines.append("  " + " \\textbar{} ".join(parts))
     lines.append(r"\end{center}")
     return "\n".join(lines)
+
+
 
 
 def format_education(education_list):
@@ -948,7 +1248,11 @@ def format_education(education_list):
 
 
 def format_summary(summary: str) -> str:
-    return highlight_keywords_latex(latex_escape(summary.strip()))
+    tex = latex_escape((summary or "").strip())
+    tex = highlight_keywords_latex(tex)
+    tex = auto_linkify_latex(tex)
+    return tex
+
 
 
 
@@ -1033,7 +1337,10 @@ def format_skills(skills_list):
         cat_tex = latex_escape(cat + ":")
         vals_tex = latex_escape(", ".join(skills))
         lines.append(f"\\textbf{{{cat_tex}}} {vals_tex}\\\\")
-    return highlight_keywords_latex("\n".join(lines))
+    skills_tex = "\n".join(lines)
+    skills_tex = highlight_keywords_latex(skills_tex)
+    skills_tex = auto_linkify_latex(skills_tex)
+    return skills_tex
 
 
 
@@ -1043,7 +1350,7 @@ def format_projects(projects_list):
 
     \noindent\begin{tabular*}{\textwidth}{@{}l@{\extracolsep{\fill}}r@{}}
       \textbf{Title}\badge{Badge}\techstackproj{Tools}
-      & \href{...}{\textbf{GitHub Link}} \\
+      & \href{...}{\textbf{GitHub}} \\
     \end{tabular*}
     \vspace{0.08em}
     \begin{itemize}
@@ -1072,9 +1379,21 @@ def format_projects(projects_list):
         if not badge_raw:
             badge_raw = default_badges[idx % len(default_badges)]
 
+        # Title (already bold), badge, tech stack
         title_tex = latex_escape(title_raw) if title_raw else ""
-        badge_tex = highlight_keywords_latex(latex_escape(badge_raw)) if badge_raw else ""
-        tools_tex = highlight_keywords_latex(latex_escape(tools_raw)) if tools_raw else ""
+
+        badge_tex = ""
+        if badge_raw:
+            badge_tex = latex_escape(badge_raw)
+            badge_tex = highlight_keywords_latex(badge_tex)
+            badge_tex = auto_linkify_latex(badge_tex)
+
+        tools_tex = ""
+        if tools_raw:
+            tools_tex = latex_escape(tools_raw)
+            tools_tex = highlight_keywords_latex(tools_tex)
+            tools_tex = auto_linkify_latex(tools_tex)
+
         timeframe_tex = latex_escape(timeframe_raw) if timeframe_raw else ""
 
         header_lines = []
@@ -1082,6 +1401,7 @@ def format_projects(projects_list):
             r"\noindent\begin{tabular*}{\textwidth}{@{}l@{\extracolsep{\fill}}r@{}}"
         )
 
+        # Left cell: title + badge + tech stack
         left_parts = []
         if title_tex:
             left_parts.append(r"\textbf{" + title_tex + "}")
@@ -1091,10 +1411,11 @@ def format_projects(projects_list):
             left_parts.append(r"\techstackproj{" + tools_tex + "}")
         left_cell = "".join(left_parts) if left_parts else ""
 
+        # Right cell: clickable "GitHub" if we have a URL, otherwise timeframe
         right_cell = ""
         if github_raw:
             github_url = re.sub(r"\s+", "", github_raw)
-            right_cell = rf"\href{{{github_url}}}{{\textbf{{GitHub Link}}}}"
+            right_cell = rf"\href{{{github_url}}}{{\textbf{{GitHub}}}}"
         elif timeframe_tex:
             right_cell = timeframe_tex
 
@@ -1104,13 +1425,16 @@ def format_projects(projects_list):
 
         block_parts = header_lines
 
+        # Bullets: escape -> highlight -> auto-linkify URLs
         if bullets:
             block_parts.append(r"\begin{itemize}")
             for b in bullets:
                 b_raw = str(b).strip()
                 if not b_raw:
                     continue
-                b_tex = highlight_keywords_latex(latex_escape(b_raw))
+                b_tex = latex_escape(b_raw)
+                b_tex = highlight_keywords_latex(b_tex)
+                b_tex = auto_linkify_latex(b_tex)
                 block_parts.append(f"  \\item {b_tex}")
             block_parts.append(r"\end{itemize}")
 
@@ -1118,8 +1442,6 @@ def format_projects(projects_list):
             blocks.append("\n".join(block_parts))
 
     return "\n\n\\vspace{0.12em}\n\n".join(blocks)
-
-
 
 
 
@@ -1173,9 +1495,12 @@ def format_experience(exp_list):
         if bullets:
             lines.append(r"\begin{itemize}")
             for b in bullets:
-                b_tex = highlight_keywords_latex(latex_escape(b))
+                b_tex = latex_escape(b)
+                b_tex = highlight_keywords_latex(b_tex)
+                b_tex = auto_linkify_latex(b_tex)
                 lines.append(f"  \\item {b_tex}")
             lines.append(r"\end{itemize}")
+
 
         block = "\n".join(lines)
         if idx != len(exp_list) - 1 and block:
@@ -1201,7 +1526,10 @@ def format_certifications(cert_list):
     if not cleaned:
         return ""
     joined = ", ".join(cleaned)
-    return r"\textbf{Certifications:} " + latex_escape(joined) + r"\\"
+    body = latex_escape(joined)
+    body = auto_linkify_latex(body)
+    return r"\textbf{Certifications:} " + body + r"\\"
+
 
 
 def format_extracurricular(ex_list):
@@ -1209,14 +1537,15 @@ def format_extracurricular(ex_list):
     If there are extracurricular activities, render them as:
 
       \textbf{Extra-Curricular:} item1; item2; item3\\
-
-    If none, return empty string (so no line is shown).
     """
     items = [str(x).strip() for x in ex_list or [] if str(x).strip()]
     if not items:
         return ""
     joined = "; ".join(items)
-    return r"\textbf{Extra-Curricular:} " + latex_escape(joined) + r"\\"
+    body = latex_escape(joined)
+    body = auto_linkify_latex(body)
+    return r"\textbf{Extra-Curricular:} " + body + r"\\"
+
 
 
 # ===================== COVER LETTER: FORMATTERS ===================== #
@@ -1237,7 +1566,10 @@ def build_cover_header_block(header: dict) -> str:
     location = (header.get("location") or "").strip()
     phone = (header.get("phone") or "").strip()
     email = (header.get("email") or "").replace(" ", "").strip()
-    github_url = fix_url(header.get("github_url") or "")
+    github_url = normalize_http_url(header.get("github_url") or "")
+    linkedin_url = normalize_http_url(header.get("linkedin_url") or "")
+    portfolio_url = normalize_http_url(header.get("portfolio_url") or "")
+
     linkedin_url = fix_url(header.get("linkedin_url") or "")
     portfolio_url = fix_url(header.get("portfolio_url") or "")
 
@@ -1300,19 +1632,22 @@ def build_cover_body_block(body_paragraphs):
     - Joins the paragraphs to compute a word count.
     - Escapes LaTeX characters.
     - Highlights important AI/ML/ATS keywords by wrapping them in \textbf{...}.
+    - Auto-linkifies URLs/emails in place.
     """
     clean_paras = [p.strip() for p in (body_paragraphs or []) if p.strip()]
     plain = " ".join(clean_paras)
     wc = word_count(plain)
 
-    # Escape for LaTeX, THEN highlight keywords
-    escaped_paras = [
-        highlight_keywords_latex(latex_escape(p))
-        for p in clean_paras
-    ]
+    escaped_paras = []
+    for p in clean_paras:
+        t = latex_escape(p)
+        t = highlight_keywords_latex(t)
+        t = auto_linkify_latex(t)
+        escaped_paras.append(t)
 
     body_tex = "\n\n".join(escaped_paras)
     return body_tex, wc
+
 
 
 
@@ -1406,8 +1741,10 @@ def check_max_two_pages(pdf_path: Path):
 
 # ===================== MAIN: ONE PROMPT → RESUME + COVER LETTER ===================== #
 
+# ===================== MAIN: ONLY COVER LETTER, KEEP ORIGINAL RESUME PDF ===================== #
+
 def main():
-    # Always read the Gemini API key from gemini_api_key.txt in this folder.
+    # 1) Load Gemini API key
     api_key = ""
     try:
         if GEMINI_KEY_FILE.exists():
@@ -1421,16 +1758,16 @@ def main():
             "Create this file and put your Gemini API key on the first line."
         )
 
-
+    # 2) Check input files
     if not RESUME_PDF_PATH.exists():
         raise FileNotFoundError(f"Resume PDF not found at: {RESUME_PDF_PATH}")
     if not JOB_DESC_PATH.exists():
         raise FileNotFoundError(f"Job description file not found at: {JOB_DESC_PATH}")
 
+    # 3) Extract original resume text + links (we will KEEP this PDF as‑is)
     print(f"- extracting text from PDF: {RESUME_PDF_PATH}")
     resume_plain = extract_text_from_pdf(RESUME_PDF_PATH).strip()
 
-    # Also extract real hyperlink URLs (GitHub, LinkedIn, portfolio, project repos)
     try:
         resume_links = extract_links_from_pdf(RESUME_PDF_PATH)
     except Exception as e:
@@ -1446,11 +1783,11 @@ def main():
                 continue
         return ""
 
-    # From original resume PDF
+    # Profile links from original resume PDF
     github_from_pdf = first_matching(resume_links, lambda u: "github.com" in u.lower())
     linkedin_from_pdf = first_matching(resume_links, lambda u: "linkedin.com" in u.lower())
 
-    # Portfolio / personal site = first http(s) link that's not GitHub/LinkedIn
+    # Portfolio = first http(s) link that is not GitHub/LinkedIn
     portfolio_from_pdf = ""
     for u in resume_links:
         low = u.lower()
@@ -1460,14 +1797,12 @@ def main():
             portfolio_from_pdf = u
             break
 
-
-    # --- NEW: compute base section counts + 80% targets ---
+    # 4) Compute section word counts -> 80% targets (for Gemini prompt)
     counts = estimate_resume_section_word_counts(resume_plain)
 
     def default_if_zero(v, default):
         return default if not v or v <= 0 else v
 
-    # raw counts from original; if we fail to detect, use defaults
     summary_raw = default_if_zero(counts["summary"], 80)
     skills_raw = default_if_zero(counts["skills"], 120)
     experience_raw = default_if_zero(counts["experience"], 300)
@@ -1475,7 +1810,7 @@ def main():
     def to_80_percent(v: int) -> int:
         if v <= 0:
             return 1
-        return max(1, int(round(v * 0.8)))
+        return max(1, int(round(v * 0.75)))
 
     summary_limit = to_80_percent(summary_raw)
     skills_limit = to_80_percent(skills_raw)
@@ -1486,88 +1821,106 @@ def main():
         f"{summary_raw} / {skills_raw} / {experience_raw}"
     )
     print(
-        f"- 80% word targets passed to Gemini (summary/skills/experience): "
+        f"- 75–80% word targets passed to Gemini (summary/skills/experience): "
         f"{summary_limit} / {skills_limit} / {experience_limit}"
     )
 
     job_desc = JOB_DESC_PATH.read_text(encoding="utf-8").strip()
 
+    # 5) Check if original resume actually has a SUMMARY
+    original_summary_text = extract_resume_summary_text(resume_plain)
+    has_original_summary = bool(original_summary_text and original_summary_text.strip())
+    generate_summary_flag = has_original_summary  # only let Gemini touch summary if one already exists
+
+    print(f"- original SUMMARY present: {has_original_summary} -> generate_summary={generate_summary_flag}")
+
+    # 6) Call Gemini ONCE for JSON (resume + cover letter),
+    # but we will only turn the COVER LETTER into a PDF.
     print("- calling Gemini ONCE for resume + cover letter JSON ...")
-    resume_data, cl_data = call_gemini_all(
-        resume_text=resume_plain,
-        job_description=job_desc,
-        api_key=api_key,
-        summary_word_limit=summary_limit,
-        skills_word_limit=skills_limit,
-        experience_word_limit=experience_limit,
-    )
-    
-    # ----- Force header hyperlinks to match original resume PDF -----
-    header = resume_data.get("header", {})
+    try:
+        # Newer call_gemini_all with generate_summary flag
+        resume_data, cl_data = call_gemini_all(
+            resume_text=resume_plain,
+            job_description=job_desc,
+            api_key=api_key,
+            summary_word_limit=summary_limit,
+            skills_word_limit=skills_limit,
+            experience_word_limit=experience_limit,
+            generate_summary=generate_summary_flag,
+        )
+    except TypeError:
+        # Fallback for older signature without generate_summary
+        print("⚠️ call_gemini_all() has no 'generate_summary' parameter, calling without it.")
+        resume_data, cl_data = call_gemini_all(
+            resume_text=resume_plain,
+            job_description=job_desc,
+            api_key=api_key,
+            summary_word_limit=summary_limit,
+            skills_word_limit=skills_limit,
+            experience_word_limit=experience_limit,
+        )
 
-    def choose(existing, fallback):
+    # 7) Respect user's SUMMARY preference (no new summary if none in original)
+    if has_original_summary:
+        resume_data["summary"] = original_summary_text.strip()
+        print("- preserved original SUMMARY from PDF in resume_data['summary']")
+    else:
+        # Make sure summary is effectively "off"
+        summary_val = (resume_data.get("summary") or "").strip()
+        if summary_val:
+            resume_data["summary"] = ""
+            print("- original PDF had NO SUMMARY; cleared Gemini summary to avoid generating one")
+        else:
+            resume_data["summary"] = ""
+
+    # 8) Force header hyperlinks to match original resume PDF and copy into cover-letter header
+    header = resume_data.get("header", {}) or {}
+
+    def prefer_pdf(existing: str, pdf_url: str) -> str:
+        """
+        Prefer real URL from the original PDF; strip obvious placeholders.
+        """
         existing = (existing or "").strip()
-        fallback = (fallback or "").strip()
-        return existing or fallback
+        pdf_url = (pdf_url or "").strip()
+        PLACEHOLDERS = {
+            "github", "githublink", "github link",
+            "linkedin", "linkedinlink", "linkedin link",
+            "portfolio", "portfoliolink", "portfolio link",
+        }
+        if existing.lower() in PLACEHOLDERS:
+            existing = ""
+        return pdf_url or existing
 
-    header["github_url"] = choose(header.get("github_url"), github_from_pdf)
-    header["linkedin_url"] = choose(header.get("linkedin_url"), linkedin_from_pdf)
-    header["portfolio_url"] = choose(header.get("portfolio_url"), portfolio_from_pdf)
+    header["github_url"] = prefer_pdf(header.get("github_url"), github_from_pdf)
+    header["linkedin_url"] = prefer_pdf(header.get("linkedin_url"), linkedin_from_pdf)
+    header["portfolio_url"] = prefer_pdf(header.get("portfolio_url"), portfolio_from_pdf)
+
+    # Preserve any *extra* links from the original resume in header["extra_links"]
+    header_links_set = {
+        v.strip()
+        for v in (
+            header.get("github_url"),
+            header.get("linkedin_url"),
+            header.get("portfolio_url"),
+        )
+        if v
+    }
+    extra_links = [u for u in resume_links if u not in header_links_set]
+    header["extra_links"] = extra_links
     resume_data["header"] = header
 
-    # Keep cover-letter header in sync (so it also has the same links)
-    cl_header = cl_data.get("header", {})
+    # Copy clean header into COVER LETTER header
+    cl_header = cl_data.get("header", {}) or {}
     for key in ("name", "phone", "email", "github_url", "linkedin_url", "portfolio_url"):
-        if not (cl_header.get(key) or "").strip():
-            cl_header[key] = header.get(key, "")
+        cl_header[key] = header.get(key, "")
+    cl_header.pop("extra_links", None)  # not needed in cover letter
     cl_data["header"] = cl_header
 
-    # ----- If resume has any GitHub link, ensure projects get one too -----
-    header_github = (header.get("github_url") or "").strip()
-    if header_github:
-        for proj in resume_data.get("projects", []):
-            github_raw = (proj.get("github_url") or "").strip()
-            if github_raw.lower() in ("none", "n/a", "na", "null", "-"):
-                github_raw = ""
-            # If project has no repo URL, fall back to profile GitHub
-            if not github_raw:
-                proj["github_url"] = header_github
-
-    # ----- Build resume content for PDF -----
-    header_tex = format_resume_header(resume_data["header"])
-    education_tex = format_education(resume_data["education"])  # ALL education printed here
-    summary_tex = format_summary(resume_data["summary"])
-    skills_tex = format_skills(resume_data["skills"])
-    projects_tex = format_projects(resume_data["projects"])
-    experience_tex = format_experience(resume_data["experience"])
-    certifications_tex = format_certifications(resume_data["certifications"])
-    extracurricular_tex = format_extracurricular(resume_data["extracurriculars"])
-
-    write_resume_tex(
-        RESUME_TEX_PATH,
-        header_tex,
-        summary_tex,
-        education_tex,
-        skills_tex,
-        certifications_tex,
-        extracurricular_tex,
-        projects_tex,
-        experience_tex,
-    )
-
-    resume_pdf = compile_tex(RESUME_TEX_PATH)
-    try:
-        check_max_two_pages(resume_pdf)
-    except Exception as e:
-        print(f"Page count check warning: {e}")
-    print("✅ Tailored resume PDF generated.")
-
-    # ----- Build cover letter -----
-    cl_header = cl_data["header"]
+    # 9) Build COVER LETTER ONLY (no Gemini resume PDF)
     letter = cl_data["letter"]
 
     header_block = build_cover_header_block(cl_header)
-    date_str = date.today().strftime("%B %d, %Y")  # always today's date
+    date_str = date.today().strftime("%B %d, %Y")
     date_line = latex_escape(date_str)
     company_block = build_cover_company_block(letter)
     salutation_line = latex_escape((letter.get("salutation") or "Dear Hiring Manager,").strip())
@@ -1575,7 +1928,7 @@ def main():
     body_tex, body_wc = build_cover_body_block(letter.get("body_paragraphs"))
     print(f"- cover letter body word count (should be <= 400): {body_wc}")
     if body_wc > 400:
-        print("  WARNING: Gemini exceeded 400 words in cover letter body; consider trimming.")
+        print("  WARNING: Gemini exceeded ~400 words in cover-letter body; consider trimming manually.")
 
     closing_block = build_cover_closing_block(letter, cl_header)
 
@@ -1595,13 +1948,16 @@ def main():
     cl_pdf = compile_tex(COVER_LETTER_TEX_PATH)
     print(f"✅ Cover letter PDF generated at: {cl_pdf}")
 
-    # ----- Do NOT merge resume + cover letter; keep PDFs separate -----
-    # combined_pdf = BASE_DIR / "resume_and_cover_letter_combined.pdf"
-    # merge_pdfs(resume_pdf, cl_pdf, combined_pdf)
+    # 10) MERGE: ORIGINAL resume PDF + generated cover letter PDF
+    #     (no Gemini-generated resume PDF at all)
+    resume_pdf = RESUME_PDF_PATH  # original file, unchanged
+    combined_pdf = BASE_DIR / "resume_and_cover_letter_combined.pdf"
+    merge_pdfs(resume_pdf, cl_pdf, combined_pdf)
 
-    print("🎉 Done. One Gemini prompt, 80% word targets applied. Tailored resume and cover letter PDFs generated separately.")
-
-
+    print("🎉 Done.")
+    print("   - Resume in the combined PDF is the ORIGINAL resume PDF (not generated by Gemini).")
+    print(f"   - Cover letter is generated by Gemini.")
+    print(f"   - Combined file: {combined_pdf}")
 
 
 if __name__ == "__main__":
